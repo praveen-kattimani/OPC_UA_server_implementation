@@ -39,6 +39,14 @@ fileOpenMethod(UA_Server*, const UA_NodeId*, void*,
     openMode = mode;
     fileIsOpen = true;
 
+    printf("openMode = 0x%02X\n", openMode);
+
+    if(openMode & 0x04) {   // EraseExisting bit
+        printf("Erase executed\n");
+        memset(buffer, 0, sizeof(buffer));
+        bufferSize = 0;
+    }
+
     filePos = 0;
 
     UA_UInt32 handle = 1;
@@ -53,8 +61,6 @@ fileWriteMethod(UA_Server*, const UA_NodeId*, void*,
                 const UA_NodeId*, void*,
                 size_t inputSize, const UA_Variant* input,
                 size_t, UA_Variant*) {
-
-    bufferSize = 0;
 
     if(!fileIsOpen || inputSize != 2)
         return UA_STATUSCODE_BADINVALIDARGUMENT;
