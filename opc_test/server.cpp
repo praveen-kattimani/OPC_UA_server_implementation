@@ -148,15 +148,50 @@ fileCloseMethod(UA_Server*, const UA_NodeId*, void*,
                 size_t, const UA_Variant*,
                 size_t, UA_Variant*) {
 
+    if(!fileIsOpen)
+        return UA_STATUSCODE_BADINVALIDSTATE;
+
     fileIsOpen = false;
+
     printf("First 20 bytes: ");
+
     for(size_t i = 0; i < 20 && i < bufferSize; i++)
         printf("%c", buffer[i]);
-    printf("\n");
 
-    printf("File closed, size=%zu\n", bufferSize);
+    printf("\nFile size = %zu bytes\n", bufferSize);
+
+    /* --------- PERSIST TO DISK --------- */
+
+    const char *persistPath = "/home/praveenk/Desktop/OPC_UA_server_implementation/opc_test/Server_files_&_folders/config_upload.csv";   // change to .csv if needed
+
+    FILE *f = fopen(persistPath, "wb");
+    if(!f) {
+        printf("ERROR: Failed to open %s for writing\n", persistPath);
+        return UA_STATUSCODE_BADUNEXPECTEDERROR;
+    }
+
+    size_t written = fwrite(buffer, 1, bufferSize, f);
+    fclose(f);
+
+    if(written != bufferSize) {
+        printf("ERROR: Incomplete save (wrote %zu of %zu bytes)\n",
+               written, bufferSize);
+        return UA_STATUSCODE_BADUNEXPECTEDERROR;
+    }
+
+    printf("Persisted %zu bytes to %s\n", written, persistPath);
+
+    /* --------- RESET STATE (optional) --------- */
+
+    filePos = 0;
+    // keep buffer content in RAM if you want Read() after Close
+    // otherwise clear it:
+    // memset(buffer, 0, sizeof(buffer));
+    // bufferSize = 0;
+
     return UA_STATUSCODE_GOOD;
 }
+
 
 /* ================= Helper ================= */
 
