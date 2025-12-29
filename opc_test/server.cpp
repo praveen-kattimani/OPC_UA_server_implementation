@@ -17,11 +17,14 @@ typedef struct {
 } FileState;
 
 /* Initialize two separate states with different paths */
-static FileState configState = { .bufferSize = 0, .filePos = 0, .isOpen = false,
-                                .persistPath = "/home/praveenk/Desktop/OPC_UA_server_implementation/opc_test/Server_files_&_folders/config_upload.csv" };
+static FileState MenuState = { .bufferSize = 0, .filePos = 0, .isOpen = false,
+                                .persistPath = "/home/praveenk/Desktop/OPC_UA_server_implementation/opc_test/Server_files_&_folders/Menu.txt" };
 
 static FileState logState    = { .bufferSize = 0, .filePos = 0, .isOpen = false,
                              .persistPath = "/home/praveenk/Desktop/OPC_UA_server_implementation/opc_test/Server_files_&_folders/system_logs.txt" };
+
+static FileState firmwareState    = { .bufferSize = 0, .filePos = 0, .isOpen = false,
+                             .persistPath = "/home/praveenk/Desktop/OPC_UA_server_implementation/opc_test/Server_files_&_folders/firmware.bin" };
 
 static UA_NodeId myDeviceTypeId;
 static UA_NodeId myDeviceId;
@@ -172,9 +175,10 @@ int main() {
                             UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES), UA_QUALIFIEDNAME(1, (char*)"MyDevice"),
                             myDeviceTypeId, oa, NULL, NULL);
 
-    /* 3. Add Two Separate File Instances */
-    addFileInstance(server, myDeviceId, "ConfigFile", "MyDevice_ConfigFile", &configState);
+    /* 3. Add Three Separate File Instances */
+    addFileInstance(server, myDeviceId, "MenuFile", "MyDevice_MenuFile", &MenuState);
     addFileInstance(server, myDeviceId, "LogFile",    "MyDevice_LogFile",    &logState);
+    addFileInstance(server, myDeviceId, "FimwareFile",    "MyDevice_FirmwareFile",    &firmwareState);
 
     UA_Boolean running = true;
     UA_Server_run(server, &running);
