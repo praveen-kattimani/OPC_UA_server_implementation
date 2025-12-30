@@ -8,7 +8,7 @@ extern "C" {
 /* ================= File State Structure ================= */
 
 typedef struct {
-    UA_Byte buffer[4096];
+    UA_Byte *buffer;
     size_t  bufferSize;
     size_t  filePos;
     UA_Boolean isOpen;
@@ -17,13 +17,13 @@ typedef struct {
 } FileState;
 
 /* Initialize two separate states with different paths */
-static FileState MenuState = { .bufferSize = 0, .filePos = 0, .isOpen = false,
+static FileState MenuState = { .buffer = NULL, .bufferSize = 0, .filePos = 0, .isOpen = false,
                                 .persistPath = "/home/praveenk/Desktop/OPC_UA_server_implementation/opc_test/Server_files_&_folders/Menu.txt" };
 
-static FileState logState    = { .bufferSize = 0, .filePos = 0, .isOpen = false,
+static FileState logState    = { .buffer = NULL, .bufferSize = 0, .filePos = 0, .isOpen = false,
                              .persistPath = "/home/praveenk/Desktop/OPC_UA_server_implementation/opc_test/Server_files_&_folders/system_logs.txt" };
 
-static FileState firmwareState    = { .bufferSize = 0, .filePos = 0, .isOpen = false,
+static FileState firmwareState    = { .buffer = NULL, .bufferSize = 0, .filePos = 0, .isOpen = false,
                              .persistPath = "/home/praveenk/Desktop/OPC_UA_server_implementation/opc_test/Server_files_&_folders/firmware.bin" };
 
 static UA_NodeId myDeviceTypeId;
@@ -46,7 +46,14 @@ fileOpenMethod(UA_Server*, const UA_NodeId*, void*, const UA_NodeId*, void*,
     fs->isOpen = true;
     fs->filePos = 0;
 
-    if(fs->openMode & 0x04) fs->bufferSize = 0; // EraseExisting
+    /* EraseExisting logic: Clear memory if bit 2 is set */
+    if(fs->openMode & 0x04) {
+        if(fs->buffer) {
+            free(fs->buffer);
+            fs->buffer = NULL;
+        }
+        fs->bufferSize = 0;
+    }
 
     UA_UInt32 handle = 1;
     UA_Variant_setScalarCopy(output, &handle, &UA_TYPES[UA_TYPES_UINT32]);
@@ -64,11 +71,22 @@ fileWriteMethod(UA_Server*, const UA_NodeId*, void*, const UA_NodeId*, void*,
     if(!(fs->openMode & 0x02)) return UA_STATUSCODE_BADNOTWRITABLE;
 
     UA_ByteString *data = (UA_ByteString*)input[1].data;
-    if(fs->bufferSize + data->length > 4096) return UA_STATUSCODE_BADOUTOFMEMORY;
+    if(!data->length) return UA_STATUSCODE_GOOD;
 
+    /* DYNAMIC ALLOCATION: Resize the buffer to fit new data */
+    size_t newSize = fs->bufferSize + data->length;
+    UA_Byte *newBuffer = (UA_Byte*)realloc(fs->buffer, newSize);
+
+    if(!newBuffer) {
+        printf("Error: Out of memory!\n");
+        return UA_STATUSCODE_BADOUTOFMEMORY;
+    }
+
+    fs->buffer = newBuffer;
     memcpy(fs->buffer + fs->bufferSize, data->data, data->length);
-    fs->bufferSize += data->length;
+    fs->bufferSize = newSize;
 
+    printf("Written %zu bytes to %s\n", data->length, fs->persistPath);
     return UA_STATUSCODE_GOOD;
 }
 
@@ -82,7 +100,7 @@ fileReadMethod(UA_Server*, const UA_NodeId*, void*, const UA_NodeId*, void*,
     if(!(fs->openMode & 0x01)) return UA_STATUSCODE_BADNOTREADABLE;
 
     UA_Int32 length = *(UA_Int32*) input[1].data;
-    if(fs->filePos >= fs->bufferSize) {
+    if(fs->filePos >= fs->bufferSize || !fs->buffer) {
         UA_ByteString empty = UA_BYTESTRING_NULL;
         UA_Variant_setScalarCopy(output, &empty, &UA_TYPES[UA_TYPES_BYTESTRING]);
         return UA_STATUSCODE_GOOD;
@@ -109,12 +127,18 @@ fileCloseMethod(UA_Server*, const UA_NodeId*, void*, const UA_NodeId*, void*,
     if(!fs || !fs->isOpen) return UA_STATUSCODE_BADINVALIDSTATE;
 
     fs->isOpen = false;
-    FILE *f = fopen(fs->persistPath, "wb");
-    if(f) {
-        fwrite(fs->buffer, 1, fs->bufferSize, f);
-        fclose(f);
-        printf("Saved %zu bytes to %s\n", fs->bufferSize, fs->persistPath);
+    if(fs->buffer && fs->bufferSize > 0) {
+        FILE *f = fopen(fs->persistPath, "wb");
+        if(f) {
+            fwrite(fs->buffer, 1, fs->bufferSize, f);
+            fclose(f);
+            printf("Saved %zu bytes to %s\n", fs->bufferSize, fs->persistPath);
+
+        }
     }
+
+    free(fs->buffer);
+    fs->buffer = NULL;
 
     return UA_STATUSCODE_GOOD;
 }
@@ -182,6 +206,12 @@ int main() {
 
     UA_Boolean running = true;
     UA_Server_run(server, &running);
+
+    /* Cleanup Memory on Shutdown */
+    if(MenuState.buffer) free(MenuState.buffer);
+    if(logState.buffer) free(logState.buffer);
+    if(firmwareState.buffer) free(firmwareState.buffer);
+
     UA_Server_delete(server);
     return 0;
 }
