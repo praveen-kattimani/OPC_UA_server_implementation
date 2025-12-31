@@ -1,3 +1,10 @@
 opc_test/open62541.o
 opc_test/server
 opc_test/Server_files_&_folders/
+opc_test/file_manager.o
+opc_test/main.o
+opc_test/secure_server
+opc_test/security_config.o
+opc_test/security/OPC_certs/server
+opc_test/security/OPC_certs/trusted
+
