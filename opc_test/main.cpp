@@ -1,14 +1,9 @@
 #include "file_manager.h"
 #include "security_config.h"
-#include <csignal>
 #include <cstring>
 #include <iostream>
 
-/* * Initialize the structs with default values.
- * We leave persistPath empty here because C++ does not allow
- * direct pointer-to-array assignment in this syntax.
- */
-/* Initialize two separate states with different paths */
+/* Initialize three separate states with different paths */
 static FileState MenuState = { .buffer = NULL, .bufferSize = 0, .filePos = 0, .isOpen = false,
                               .persistPath = "/home/praveenk/Desktop/OPC_UA_server_implementation/opc_test/Server_files_&_folders/Menu.txt" };
 
@@ -23,10 +18,9 @@ static UA_NodeId myDeviceId;
 
 int main() {
     UA_Server *server = UA_Server_new();
-//    UA_ServerConfig_setDefault(UA_Server_getConfig(server));
 
     /* 2. LOAD SECURITY
-     * This calls your 10-argument function in security_config.cpp
+     * This calls your function in security_config.cpp
      */
     UA_ByteString cert = UA_BYTESTRING_NULL;
     UA_ByteString key = UA_BYTESTRING_NULL;

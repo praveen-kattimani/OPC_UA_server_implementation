@@ -35,14 +35,37 @@ fileOpenMethod(UA_Server*, const UA_NodeId*, void*, const UA_NodeId*, void*,
     fs->isOpen = true;
     fs->filePos = 0;
 
-    /* EraseExisting logic: Clear memory if bit 2 is set */
+    /* EraseExisting logic: Clear memory + file on disk */
     if(fs->openMode & 0x04) {
+
+        /* clear RAM buffer */
         if(fs->buffer) {
             free(fs->buffer);
             fs->buffer = NULL;
         }
         fs->bufferSize = 0;
+
+        /* truncate file on disk */
+        FILE *f = fopen(fs->persistPath, "wb");
+        if(f) {
+            fclose(f);   /* zero-length file now */
+            printf("Erased existing file: %s\n", fs->persistPath);
+        }
     }
+
+    if((mode & 0x01)) { /* Read bit */
+        FILE *f = fopen(fs->persistPath, "rb");
+        if(f) {
+            fseek(f, 0, SEEK_END);
+            fs->bufferSize = ftell(f);
+            fseek(f, 0, SEEK_SET);
+
+            fs->buffer = (UA_Byte*)malloc(fs->bufferSize);
+            fread(fs->buffer, 1, fs->bufferSize, f);
+            fclose(f);
+        }
+    }
+
 
     UA_UInt32 handle = 1;
     UA_Variant_setScalarCopy(output, &handle, &UA_TYPES[UA_TYPES_UINT32]);
@@ -86,18 +109,24 @@ fileReadMethod(UA_Server*, const UA_NodeId*, void*, const UA_NodeId*, void*,
                size_t inputSize, const UA_Variant *input, size_t, UA_Variant *output) {
 
     FileState *fs = (FileState*)objectContext;
-    if(!fs || !fs->isOpen || inputSize != 2) return UA_STATUSCODE_BADINVALIDSTATE;
-    if(!(fs->openMode & 0x01)) return UA_STATUSCODE_BADNOTREADABLE;
+    if(!fs || !fs->isOpen || inputSize != 2)
+        return UA_STATUSCODE_BADINVALIDSTATE;
 
-    UA_Int32 length = *(UA_Int32*) input[1].data;
-    if(fs->filePos >= fs->bufferSize || !fs->buffer) {
+    if(!(fs->openMode & 0x01))
+        return UA_STATUSCODE_BADNOTREADABLE;
+
+    if(!fs->buffer || fs->filePos >= fs->bufferSize) {
         UA_ByteString empty = UA_BYTESTRING_NULL;
         UA_Variant_setScalarCopy(output, &empty, &UA_TYPES[UA_TYPES_BYTESTRING]);
         return UA_STATUSCODE_GOOD;
     }
 
+    UA_Int32 length = *(UA_Int32*)input[1].data;
+
     size_t remaining = fs->bufferSize - fs->filePos;
-    size_t toRead = ((size_t)length < remaining) ? (size_t)length : remaining;
+    size_t toRead = (length < 0)
+                        ? remaining
+                        : (((size_t)length < remaining) ? (size_t)length : remaining);
 
     UA_ByteString data;
     UA_ByteString_allocBuffer(&data, toRead);
@@ -108,6 +137,7 @@ fileReadMethod(UA_Server*, const UA_NodeId*, void*, const UA_NodeId*, void*,
     UA_ByteString_clear(&data);
     return UA_STATUSCODE_GOOD;
 }
+
 
 
 static UA_StatusCode
